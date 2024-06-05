@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temperature and Humidity Data</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <style>
+        .chart-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .chart {
+            flex: 1 1 45%;
+            max-width: 45%;
+            margin: 10px;
+        }
+        @media (max-width: 768px) {
+            .chart {
+                flex: 1 1 100%;
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Temperature and Humidity Data</h1>
+    <div class="chart-container">
+        <div class="chart">
+            <canvas id="temperatureChart" width="400" height="200"></canvas>
+        </div>
+        <div class="chart">
+            <canvas id="humidityChart" width="400" height="200"></canvas>
+        </div>
+    </div>
+    <script>
+        const socket = io();
+        const MAX_ENTRIES = 20;
+
+        async function fetchData() {
+            const response = await fetch('/data');
+            const data = await response.json();
+            return data.slice(0, MAX_ENTRIES).reverse();
+        }
+
+        async function renderCharts() {
+            const data = await fetchData();
+
+            const timestamps = data.map(entry => new Date(entry.timestamp).toLocaleString());
+            const temperatures = data.map(entry => entry.temperature);
+            const humidities = data.map(entry => entry.humidity);
+
+            // Temperature Chart
+            const temperatureCtx = document.getElementById('temperatureChart').getContext('2d');
+            window.temperatureChart = new Chart(temperatureCtx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: [{
+                        label: 'Temperature (°C)',
+                        data: temperatures,
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                        }
+                    }
+                }
+            });
+
+            // Humidity Chart
+            const humidityCtx = document.getElementById('humidityChart').getContext('2d');
+            window.humidityChart = new Chart(humidityCtx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: [{
+                        label: 'Humidity (%)',
+                        data: humidities,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(chart, entry) {
+            const newTimestamp = new Date(entry.timestamp).toLocaleString();
+            const dataLength = chart.data.labels.length;
+
+            if (dataLength >= MAX_ENTRIES) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+
+            chart.data.labels.push(newTimestamp);
+            chart.data.datasets[0].data.push(entry[chart.data.datasets[0].label.split(' ')[0].toLowerCase()]);
+            chart.update();
+        }
+
+        renderCharts();
+
+        socket.on('new_data', function(entry) {
+            updateChart(window.temperatureChart, entry);
+            updateChart(window.humidityChart, entry);
+        });
+    </script>
+</body>
+</html>
